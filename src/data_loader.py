@@ -5,18 +5,23 @@ def load_chat_data(uploaded_file):
     content = uploaded_file.getvalue().decode("utf-8")
     lines = content.split('\n')
     
-    # Updated regex to match 'dd/mm/yy, hh:mm pm - Name: message'
-    pattern = r'(\d{2}/\d{2}/\d{2}), (\d{1,2}:\d{2}\s?(?:am|pm)) - (.*?): (.*)'
+    # Updated regex to match both 2- and 4-digit years, and handle unicode spaces
+    pattern = r'(\d{2}/\d{2}/\d{2,4}), (\d{1,2}:\d{2}(?:\s?[ap]m)?)\s*-\s*(.*?): (.*)'
+    system_pattern = r'(\d{2}/\d{2}/\d{2,4}), (\d{1,2}:\d{2}(?:\s?[ap]m)?)\s*-\s*(.*)'
     for line in lines:
-        match = re.match(pattern, line.strip())
+        line = line.strip().replace('\u202f', ' ').replace('\u200e', '')  # Remove special unicode spaces
+        match = re.match(pattern, line)
         if match:
             date, time, user, message = match.groups()
             # Convert 2-digit year to 4-digit and format as dd/mm/yyyy
             day, month, year = date.split('/')
-            full_year = f"20{year}" if int(year) < 100 else year
+            if len(year) == 2:
+                full_year = f"20{year}" if int(year) < 100 else year
+            else:
+                full_year = year
             date = f"{day}/{month}/{full_year}"
             # Normalize time to 24h format if pm/am is present
-            time = time.replace(' ', ' ').strip()
+            time = time.replace('\u202f', ' ').strip()
             if 'pm' in time.lower() and time.split(':')[0] != '12':
                 hours = (int(time.split(':')[0]) + 12) % 24
                 time = f"{hours}:{time.split(':')[1].replace('pm', '').strip()}"
@@ -32,14 +37,17 @@ def load_chat_data(uploaded_file):
                 'message': message
             })
         # Handle deleted or system messages
-        elif "deleted" in line or "created" in line:
-            match = re.match(r'(\d{2}/\d{2}/\d{2}), (\d{1,2}:\d{2}\s?(?:am|pm)) - (.*)', line.strip())
+        elif "deleted" in line or "created" in line or "encrypted" in line:
+            match = re.match(system_pattern, line)
             if match:
                 date, time, content = match.groups()
                 day, month, year = date.split('/')
-                full_year = f"20{year}" if int(year) < 100 else year
+                if len(year) == 2:
+                    full_year = f"20{year}" if int(year) < 100 else year
+                else:
+                    full_year = year
                 date = f"{day}/{month}/{full_year}"
-                time = time.replace(' ', ' ').strip()
+                time = time.replace('\u202f', ' ').strip()
                 if 'pm' in time.lower() and time.split(':')[0] != '12':
                     hours = (int(time.split(':')[0]) + 12) % 24
                     time = f"{hours}:{time.split(':')[1].replace('pm', '').strip()}"
